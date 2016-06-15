@@ -47,9 +47,13 @@ define(["jquery"], function ($) {
 				opt_options.closeBubbleExtras();  
 			}
 		};
-	
+
 		var options = opt_options || {};
-	  
+
+		if (options.zIndex) {
+			this.baseZIndex_ = options.zIndex;
+		}
+
 		if (options['backgroundColor'] == undefined) {
 		  options['backgroundColor'] = this.BACKGROUND_COLOR_;
 		}
@@ -254,8 +258,8 @@ define(["jquery"], function ($) {
 	
 	  // Content area
 	  var contentContainer = this.contentContainer_ = document.createElement('DIV');
-	  contentContainer.style['overflowX'] = 'hidden';//'auto';
-	  contentContainer.style['overflowY'] = 'hidden';//'auto';
+	  //contentContainer.style['overflowX'] = 'hidden';//'auto';
+	  //contentContainer.style['overflowY'] = 'hidden';//'auto';
 	  contentContainer.style['cursor'] = 'default';
 	  contentContainer.style['clear'] = 'both';
 	  contentContainer.style['position'] = 'relative';
@@ -1102,11 +1106,11 @@ define(["jquery"], function ($) {
 	  var pan = !this.get('disableAutoPan');
 	  if (pan) {
 		var that = this;
-		that.panToView();
-		/*window.setTimeout(function() {
+		//that.panToView();
+		window.setTimeout(function() {
 		  // Pan into view, done in a time out to make it feel nicer :)
 		  that.panToView();
-		}, 200);*/
+		}, 200);
 	  }
 	};
 	InfoBubble.prototype['open'] = InfoBubble.prototype.open;
@@ -1178,36 +1182,17 @@ define(["jquery"], function ($) {
 		return;
 	  }
 	
-	  var anchorHeight = this.getAnchorHeight_();
-	  var height = this.bubble_.offsetHeight + anchorHeight;
 	  var map = this.get('map');
-	  var mapDiv = map.getDiv();
-	  var mapHeight = mapDiv.offsetHeight;
-	
 	  var latLng = this.getPosition();
-	  var centerPos = projection.fromLatLngToContainerPixel(map.getCenter());
 	  var pos = projection.fromLatLngToContainerPixel(latLng);
-	
-	  // Find out how much space at the top is free
-	  var spaceTop = centerPos.y - height;
-	
-	  // Find out how much space at the bottom is free
-	  var spaceBottom = mapHeight - centerPos.y;
-	
-	  var needsTop = spaceTop < 0;
-	  var deltaY = 0;
-	
-	  if (needsTop) {
-		spaceTop *= -1;
-		deltaY = (spaceTop + spaceBottom) / 2;
-	  }
-	
-	  pos.y -= deltaY;
+	  var height = $(this.get('content')).height();
+	  pos.y -= height/2;
 	  latLng = projection.fromContainerPixelToLatLng(pos);
 	
 	  if (map.getCenter() != latLng) {
 		map.setCenter(latLng);
 	  }
+
 	};
 	InfoBubble.prototype['panToView'] = InfoBubble.prototype.panToView;
 	

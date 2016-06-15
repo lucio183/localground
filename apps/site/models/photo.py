@@ -1,12 +1,13 @@
 from django.contrib.gis.db import models
 from django.conf import settings
 from localground.apps.site.managers import PhotoManager
-from localground.apps.site.models import BasePoint, BaseUploadedMedia
+from localground.apps.site.models import ExtrasMixin, BasePointMixin, BaseUploadedMedia
 from localground.apps.lib.helpers import get_timestamp_no_milliseconds
 import os
+from swampdragon.models import SelfPublishModel
+from localground.apps.site.api.realtime_serializers import PhotoRTSerializer
 
-
-class Photo(BasePoint, BaseUploadedMedia):
+class Photo(ExtrasMixin, BasePointMixin, BaseUploadedMedia): #SelfPublishModel
     file_name_large = models.CharField(max_length=255)
     file_name_medium = models.CharField(max_length=255)
     file_name_medium_sm = models.CharField(max_length=255)
@@ -14,10 +15,12 @@ class Photo(BasePoint, BaseUploadedMedia):
     file_name_marker_lg = models.CharField(max_length=255)
     file_name_marker_sm = models.CharField(max_length=255)
     device = models.CharField(max_length=255, blank=True, null=True)
+    filter_fields = BaseUploadedMedia.filter_fields + ('device',)
     objects = PhotoManager()
+    #serializer_class = PhotoRTSerializer
 
     def __unicode__(self):
-        return self.name + ' (' + self.file_name_orig + ')'
+        return '%s (%s)' % (self.name, self.file_name_orig)
 
     class Meta:
         app_label = 'site'
@@ -56,19 +59,24 @@ class Photo(BasePoint, BaseUploadedMedia):
     def delete(self, *args, **kwargs):
         # remove images from file system:
         path = self.get_absolute_path()
-        file_paths = [
-            '%s%s' % (path, self.file_name_orig),
-            '%s%s' % (path, self.file_name_new),
-            '%s%s' % (path, self.file_name_large),
-            '%s%s' % (path, self.file_name_medium),
-            '%s%s' % (path, self.file_name_medium_sm),
-            '%s%s' % (path, self.file_name_small),
-            '%s%s' % (path, self.file_name_marker_lg),
-            '%s%s' % (path, self.file_name_marker_sm)
-        ]
-        for f in file_paths:
-            if os.path.exists(f) and f.find(settings.USER_MEDIA_DIR) > 0:
-                os.remove(f)
+        if len(path.split('/')) > 2: #protects against empty file path
+            file_paths = [
+                self.file_name_orig,
+                self.file_name_new,
+                self.file_name_large,
+                self.file_name_medium,
+                self.file_name_medium_sm,
+                self.file_name_small,
+                self.file_name_marker_lg,
+                self.file_name_marker_sm
+            ]
+            for f in file_paths:
+                p = '%s%s' % (path, f)
+                if (os.path.exists(p) and
+                    f is not None and
+                    len(f) > 0 and
+                    p.find(settings.USER_MEDIA_DIR) > 0):
+                    os.remove(p)
 
         # execute default behavior
         super(Photo, self).delete(*args, **kwargs)
@@ -81,15 +89,17 @@ class Photo(BasePoint, BaseUploadedMedia):
 
     def _rotate(self, user, degrees):
         from PIL import Image, ImageOps
+        import time
+        timestamp = int(time.time())
         media_path = self.get_absolute_path()
 
-        # do the rotation:
+        # 1) do the rotation:
         im = Image.open(media_path + self.file_name_new)
         file_name, ext = os.path.splitext(self.file_name_new)
         im = im.rotate(degrees)
         im.save(media_path + self.file_name_new)
 
-        # create thumbnails:
+        # 2) create thumbnails:
         sizes = [1000, 500, 250, 128, 50, 20]
         photo_paths = []
         for s in sizes:
@@ -100,10 +110,24 @@ class Photo(BasePoint, BaseUploadedMedia):
                 im = ImageOps.expand(im, border=2, fill=(255, 255, 255, 255))
             else:
                 im.thumbnail((s, s), Image.ANTIALIAS)
-            abs_path = '%s%s_%s%s' % (media_path, file_name, s, ext)
-            im.save(abs_path)
-            photo_paths.append('%s_%s%s' % (file_name, s, ext))
-
+            new_file_path = '%s_%s_%s%s' % (file_name, s, timestamp, ext)
+            im.save('%s%s' % (media_path, new_file_path))
+            photo_paths.append(new_file_path)
+            
+        # 3) delete old, pre-rotated files on file systems:
+        file_paths = [
+            '%s%s' % (media_path, self.file_name_large),
+            '%s%s' % (media_path, self.file_name_medium),
+            '%s%s' % (media_path, self.file_name_medium_sm),
+            '%s%s' % (media_path, self.file_name_small),
+            '%s%s' % (media_path, self.file_name_marker_lg),
+            '%s%s' % (media_path, self.file_name_marker_sm)
+        ]
+        for f in file_paths:
+            if os.path.exists(f) and f.find(settings.USER_MEDIA_DIR) > 0:
+                os.remove(f)
+        
+        # 4) save pointers to new files in database:
         self.file_name_large = photo_paths[0]
         self.file_name_medium = photo_paths[1]
         self.file_name_medium_sm = photo_paths[2]
@@ -114,62 +138,8 @@ class Photo(BasePoint, BaseUploadedMedia):
         self.time_stamp = get_timestamp_no_milliseconds()
         self.save()
 
-    def save_upload(self, file, user, project, do_save=True):
-        from PIL import Image, ImageOps
-
-        # 1) first, set user and project (required for generating file path):
-        self.owner = user
-        self.last_updated_by = user
-        self.project = project
-
-        # 2) save original file to disk:
-        file_name_new = self.save_file_to_disk(file)
-        file_name, ext = os.path.splitext(file_name_new)
-
-        # 3) create thumbnails:
-        media_path = self.generate_absolute_path()
-        im = Image.open(media_path + '/' + file_name_new)
-        d = self.read_exif_data(im)
-        sizes = [1000, 500, 250, 128, 50, 20]
-        photo_paths = [file_name_new]
-        for s in sizes:
-            if s in [50, 25]:
-                # ensure that perfect squares:
-                im.thumbnail((s * 2, s * 2), Image.ANTIALIAS)
-                im = im.crop([0, 0, s - 2, s - 2])
-                im = ImageOps.expand(im, border=2, fill=(255, 255, 255, 255))
-            else:
-                im.thumbnail((s, s), Image.ANTIALIAS)
-            abs_path = '%s/%s_%s%s' % (media_path, file_name, s, ext)
-            im.save(abs_path)
-            photo_paths.append('%s_%s%s' % (file_name, s, ext))
-
-        # 4) save object to database:
-        self.file_name_orig = file.name
-        if self.name is None:
-            self.name = file.name
-        if self.attribution is None:
-            self.attribution = user.username
-
-        self.file_name_new = file_name_new
-        self.file_name_large = photo_paths[1]
-        self.file_name_medium = photo_paths[2]
-        self.file_name_medium_sm = photo_paths[3]
-        self.file_name_small = photo_paths[4]
-        self.file_name_marker_lg = photo_paths[5]
-        self.file_name_marker_sm = photo_paths[6]
-        self.content_type = ext.replace('.', '')  # file extension
-        self.host = settings.SERVER_HOST
-        self.virtual_path = self.generate_relative_path()
-        # from EXIF data:
-        if self.point is None:
-            self.point = d.get('point', None)
-        self.datetime_taken = d.get('datetime_taken', None)
-        self.device = d.get('model', None)
-        if do_save:
-            self.save()
-
-    def read_exif_data(self, im):
+    @classmethod
+    def read_exif_data(cls, im):
         from PIL.ExifTags import TAGS
         from datetime import datetime
         try:
@@ -226,6 +196,7 @@ class Photo(BasePoint, BaseUploadedMedia):
     def to_dict(self):
         d = super(Photo, self).to_dict()
         d.update({
+            'path_orig': self.encrypt_url(self.file_name_orig),
             'path_large': self.encrypt_url(self.file_name_large),
             'path_medium': self.encrypt_url(self.file_name_medium),
             'path_small': self.encrypt_url(self.file_name_small),

@@ -1,13 +1,13 @@
 from rest_framework import generics
 from localground.apps.site.api import serializers, filters
-from localground.apps.site.api.views.abstract_views import \
-    AuditCreate, AuditUpdate, QueryableListCreateAPIView
+from localground.apps.site.api.views.abstract_views import QueryableListCreateAPIView
 from localground.apps.site import models
 from localground.apps.site.api.permissions import CheckProjectPermissions
 from django.db.models import Q
+from localground.apps.lib.helpers import get_timestamp_no_milliseconds
 
 
-class ProjectList(QueryableListCreateAPIView, AuditCreate):
+class ProjectList(QueryableListCreateAPIView):
     serializer_class = serializers.ProjectSerializer
     filter_backends = (filters.SQLFilterBackend,)
     model = models.Project
@@ -20,15 +20,18 @@ class ProjectList(QueryableListCreateAPIView, AuditCreate):
             return models.Project.objects.get_objects_public(
                 access_key=self.request.GET.get('access_key')
             )
+    
+    def perform_create(self, serializer):
+        if serializer.validated_data.get("access_authority") == None:
+            d = {'access_authority': models.ObjectAuthority.objects.get(id=1)}
+            serializer.save(**d)
+        else:
+            serializer.save()
 
-    def pre_save(self, obj):
-        AuditCreate.pre_save(self, obj)
-        obj.access_authority = models.ObjectAuthority.objects.get(id=1)
 
-
-class ProjectInstance(generics.RetrieveUpdateDestroyAPIView, AuditUpdate):
+class ProjectInstance(generics.RetrieveUpdateDestroyAPIView):
     queryset = models.Project.objects.select_related('owner').all()
     serializer_class = serializers.ProjectDetailSerializer
 
-    def pre_save(self, obj):
-        AuditUpdate.pre_save(self, obj)
+
+

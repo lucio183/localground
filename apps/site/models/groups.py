@@ -5,14 +5,14 @@ from localground.apps.site.models.permissions import \
 from django.contrib.contenttypes import generic
 from django.contrib.contenttypes.models import ContentType
 
-from localground.apps.site.models.barcoded import Scan
+from localground.apps.site.models.mapimage import MapImage
 from localground.apps.site.models.photo import Photo
 from localground.apps.site.models.audio import Audio
 from localground.apps.site.models.video import Video
 from localground.apps.site.models import \
     Marker, WMSOverlay, ObjectTypes, BaseNamed, BaseGenericRelationMixin
 
-from localground.apps.site.managers import ProjectManager, ViewManager
+from localground.apps.site.managers import ProjectManager, SnapshotManager
 
 from django.contrib.gis.db import models
 from datetime import datetime
@@ -33,49 +33,13 @@ class Group(BaseNamed, BaseGenericRelationMixin, BasePermissions):
     basemap = models.ForeignKey(
         'WMSOverlay',
         default=12)  # default to grayscale
+    filter_fields = BaseNamed.filter_fields + ('slug',)
 
     class Meta:
         abstract = True
         app_label = 'site'
         unique_together = ('slug', 'owner')
 
-    @classmethod
-    def filter_fields(cls):
-        from localground.apps.lib.helpers import QueryField, FieldTypes
-
-        return [
-            QueryField(
-                'name',
-                id='name',
-                title='Name',
-                operator='like'),
-            QueryField(
-                'description',
-                id='description',
-                title='Description',
-                operator='like'),
-            QueryField(
-                'tags',
-                id='tags',
-                title='Tags',
-                data_type=FieldTypes.TAG,
-                operator='in'),
-            QueryField(
-                'owner__username',
-                id='owned_by',
-                title='Owned By'),
-            QueryField(
-                'date_created',
-                id='date_created_after',
-                title='After',
-                data_type=FieldTypes.DATE,
-                operator='>='),
-            QueryField(
-                'date_created',
-                id='date_created_before',
-                title='Before',
-                data_type=FieldTypes.DATE,
-                operator='<=')]
 
     @staticmethod
     def get_users():
@@ -145,7 +109,7 @@ class Project(Group):
                 'id': ObjectTypes.SCAN,
                 'overlayType': ObjectTypes.SCAN,
                 'name': 'Drawings',
-                'data': Scan.objects.by_project(self, processed_only=True).to_dict_list()
+                'data': MapImage.objects.by_project(self, processed_only=True).to_dict_list()
             })
         if include_audio:
             data.append({
@@ -195,8 +159,7 @@ class Project(Group):
         for form in forms:
             recs = form.get_objects(
                 user=self.owner,
-                project=self,
-                manually_reviewed=True)
+                project=self)
             if len(recs) > 0:
                 data.append({
                     'id': form.id,
@@ -220,7 +183,7 @@ class Project(Group):
         ).order_by('-time_stamp')[0]
 
 
-class View(Group):
+class Snapshot(Group):
 
     """
     A user-generated grouping of media.  Media associations are specified in the
@@ -228,29 +191,33 @@ class View(Group):
     """
     center = models.PointField()
     zoom = models.IntegerField()
-    objects = ViewManager()
+    objects = SnapshotManager()
 
     class Meta(Group.Meta):
-        verbose_name = 'view'
-        verbose_name_plural = 'views'
+        verbose_name = 'snapshot'
+        verbose_name_plural = 'snapshots'
 
+    @property
+    def geometry(self):
+        return self.center
+    
     @classmethod
     def sharing_form(cls):
-        from localground.apps.site.forms import ViewPermissionsForm
+        from localground.apps.site.forms import SnapshotPermissionsForm
 
-        return ViewPermissionsForm
+        return SnapshotPermissionsForm
 
     @classmethod
     def inline_form(cls, user=None):
-        from localground.apps.site.forms import ViewInlineUpdateForm
+        from localground.apps.site.forms import SnapshotInlineUpdateForm
 
-        return ViewInlineUpdateForm
+        return SnapshotInlineUpdateForm
 
     @classmethod
     def get_form(cls):
-        from localground.apps.site.forms import ViewCreateForm
+        from localground.apps.site.forms import SnapshotCreateForm
 
-        return ViewCreateForm
+        return SnapshotCreateForm
 
     def get_markers_with_counts(self):
         """
@@ -290,8 +257,8 @@ class View(Group):
     '''
 
     def to_dict(self, detailed=False):
-        from localground.apps.site.api.serializers import ViewSerializer, ViewDetailSerializer
+        from localground.apps.site.api.serializers import SnapshotSerializer, SnapshotDetailSerializer
 
         if detailed:
-            return ViewDetailSerializer(self, context={'request': {}}).data
-        return ViewSerializer(self, context={'request': {}}).data
+            return SnapshotDetailSerializer(self, context={'request': {}}).data
+        return SnapshotSerializer(self, context={'request': {}}).data

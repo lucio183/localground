@@ -1,7 +1,7 @@
 {% extends "base/base.html" %}
 {% block page_title %}Map{% endblock %}
 {% block style_links %}
-<link href="http://netdna.bootstrapcdn.com/font-awesome/4.0.3/css/font-awesome.css" rel="stylesheet">
+<link href="//netdna.bootstrapcdn.com/font-awesome/4.0.3/css/font-awesome.css" rel="stylesheet">
 <link href="/static/css/audio.css" type="text/css" media="all" rel="stylesheet"/>
 <link href="/static/css/map.css" type="text/css" media="all" rel="stylesheet"/>
 <link href="/static/scripts/thirdparty/jquery-autocomplete/jquery.autocomplete.css" type="text/css" media="all"
@@ -21,6 +21,7 @@
 
 <!-- enable iframe dialogs -->
 <script type="text/javascript" src="/static/scripts/thirdparty/jquery-autocomplete/jquery.autocomplete.js"></script>
+<script type="text/javascript" src="/static/scripts/thirdparty/selectize/selectize.min.js"></script>
 <script type="text/javascript" src="/static/scripts/thirdparty/jquery.ui.timepicker.js"></script>
 <script type="text/javascript" src="/static/scripts/helpers/dialog.js"></script>
 <script type="text/javascript" src="/static/scripts/helpers/filtermenu.js"></script>
@@ -33,7 +34,7 @@
 <script type="text/javascript" src="/static/scripts/map/overlays/photo.js"></script>
 <script type="text/javascript" src="/static/scripts/map/overlays/audio.js"></script>
 <script type="text/javascript" src="/static/scripts/map/overlays/record.js"></script>
-<script type="text/javascript" src="/static/scripts/map/overlays/scan.js"></script>
+<script type="text/javascript" src="/static/scripts/map/overlays/mapimage.js"></script>
 <script type="text/javascript" src="/static/scripts/map/overlays/marker.js"></script>
 <script type="text/javascript" src="/static/scripts/map/overlays/polyline.js"></script>
 <script type="text/javascript" src="/static/scripts/map/overlays/polygon.js"></script>
@@ -41,7 +42,7 @@
 <script type="text/javascript" src="/static/scripts/map/managers/photoManager.js"></script>
 <script type="text/javascript" src="/static/scripts/map/managers/audioManager.js"></script>
 <script type="text/javascript" src="/static/scripts/map/managers/tableManager.js"></script>
-<script type="text/javascript" src="/static/scripts/map/managers/scanManager.js"></script>
+<script type="text/javascript" src="/static/scripts/map/managers/mapimageManager.js"></script>
 <script type="text/javascript" src="/static/scripts/map/managers/markerManager.js"></script>
 <script type="text/javascript" src="/static/scripts/map/slideshow.js"></script>
 
@@ -67,7 +68,7 @@ username: '{{user.username}}',
 serverURL: '{{serverURL}}',
 overlays: {% autoescape off %}{{ overlays }}{% endautoescape %},
 showOutlines: false,
-initialMapLayerID: {{ basemap_id|default:"12" }}
+initialMapLayerID: {{ basemap_id|default:"1" }}
 };
 {% if markerID %}
 opts.markerID = {{markerID}};

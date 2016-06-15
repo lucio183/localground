@@ -5,9 +5,15 @@ from localground.apps.site import models, widgets
 
 
 class PresentationSerializer(BaseNamedSerializer):
+    '''
     code = fields.JSONField(help_text='Where the presentation code is stored',
                             required=True,
                             widget=widgets.JSONWidget)
+    '''
+    code = fields.JSONField(
+        #widget=widgets.JSONWidget,
+        style={'base_template': 'json.html', 'rows': 5},
+        required=False)
 
     class Meta:
         model = models.Presentation

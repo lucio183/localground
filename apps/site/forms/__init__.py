@@ -5,10 +5,10 @@ from localground.apps.site.forms.groupforms import (
     ProjectCreateForm,
     ProjectUpdateForm,
     ProjectInlineUpdateForm,
-    ViewPermissionsForm,
-    ViewCreateForm,
-    ViewUpdateForm,
-    ViewInlineUpdateForm,
+    SnapshotPermissionsForm,
+    SnapshotCreateForm,
+    SnapshotUpdateForm,
+    SnapshotInlineUpdateForm,
     FormCreateForm,
     FormPermissionsForm,
     FormUpdateForm,
@@ -16,4 +16,3 @@ from localground.apps.site.forms.groupforms import (
 from localground.apps.site.forms.userforms import CustomUserChangeForm, UserProfileForm
 from localground.apps.site.forms.base import get_media_form, \
     get_inline_media_form, get_inline_form, get_inline_form_with_tags
-from localground.apps.site.forms.printforms import FieldLayoutForm

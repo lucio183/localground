@@ -7,11 +7,11 @@ from django.template import RequestContext
 import simplejson as json
 from django.core.context_processors import csrf
 from django.contrib.auth.models import User
-from localground.apps.site.models import Base, Scan, Print, Project, View, Presentation
+from localground.apps.site.models import Base, MapImage, Print, Project, Snapshot, Presentation
 from django.core.exceptions import ObjectDoesNotExist
 
 # Constants describing default latitudes, longitudes, and zoom
-DEFAULT_LAT = 21.698265
+DEFAULT_LAT = 21.698265;
 DEFAULT_LONG = 14.765625
 DEFAULT_ZOOM = 8
 
@@ -47,7 +47,7 @@ def show_map_viewer(request, username, slug, access_key=None):
 
 
 @login_required()
-def show_map_editor(request, template='map/editor.html'):
+def show_map_editor(request, template='map/editor.html', slug=None):
     u = request.user
     context = RequestContext(request)
     username = u.username
@@ -56,8 +56,8 @@ def show_map_editor(request, template='map/editor.html'):
     if u.is_authenticated():
         projects = Project.objects.get_objects(u)
         projects = [p.to_dict() for p in projects]
-        views = View.objects.get_objects(u)
-        views = [v.to_dict() for v in views]
+        snapshots = Snapshot.objects.get_objects(u)
+        #snapshots = [v.to_dict() for v in snapshots]
         presentations = Presentation.objects.get_objects(u)
         presentations = [pr.to_dict() for pr in presentations]
         if u.profile.default_location is not None:
@@ -69,7 +69,7 @@ def show_map_editor(request, template='map/editor.html'):
         'lng': lng,
         'zoom': zoom,
         'projects': json.dumps(projects),
-        'views': json.dumps(views),
+        #'snapshots': json.dumps(snapshots),
         'presentations': json.dumps(presentations),
         'num_projects': len(projects)
     })
@@ -78,6 +78,29 @@ def show_map_editor(request, template='map/editor.html'):
 @login_required()
 def show_map_editor_new(request, template='map/editor1.html'):
     return show_map_editor(request, template=template)
+
+
+def show_map_viewer_embedded(request, slug, template='map/embedded.html'):
+    context = RequestContext(request)
+
+    # set defaults:
+    lat, lng, zoom = DEFAULT_LAT, DEFAULT_LONG, DEFAULT_ZOOM
+    context.update({
+        'lat': lat,
+        'lng': lng,
+        'zoom': zoom,
+        'num_projects': 1,
+        'read_only': True
+    })
+    if slug is not None:
+        snapshot = get_object_or_404(Snapshot, slug=slug)
+        snapshot = snapshot.to_dict()
+        context.update({
+            'snapshot': json.dumps(snapshot)
+        })
+    return render_to_response(template, context)
+    #return show_map_editor(request, template=template, slug=slug)
+
 
 
 def show_ebays_map_viewer(request):

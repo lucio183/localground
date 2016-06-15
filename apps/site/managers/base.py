@@ -9,22 +9,24 @@ class BaseMixin(object):
     related_fields = ['owner', 'last_updated_by']
 
     def _apply_sql_filter(self, queryset, request, context):
+        if context.get('has_filters') is not None:
+            return queryset
         if request is None or request.GET.get('query') is None:
             return queryset
 
         from localground.apps.lib.helpers import QueryParser
-        f = QueryParser(self.model, request.GET.get('query'))
-        if f.error:
+        query = QueryParser(self.model, request.GET.get('query'))
+        if query.error:
             context.update({'error_message': query.error_message})
             return queryset
 
         # Add some information to the request context
         context.update({
-            'filter_fields': f.populate_filter_fields(),
-            'sql': f.query_text,
+            'filter_fields': query.populate_filter_fields(),
+            'sql': query.query_text,
             'has_filters': True
         })
-        return f.extend_query(queryset)
+        return query.extend_query(queryset)
 
     def get_objects(
             self,
@@ -42,7 +44,7 @@ class BaseMixin(object):
                  .select_related(*self.related_fields)
                  .filter(owner=user)
              )
-        q = self._apply_sql_filter(q, request, context)
+        #q = self._apply_sql_filter(q, request, context)
 
         if ordering_field:
             q = q.order_by(ordering_field)
@@ -84,30 +86,6 @@ class ObjectMixin(BaseMixin):
     related_fields = ['project', 'owner', 'last_updated_by']
     prefetch_fields = []
 
-    def populate_tags_for_queryset(self, queryset):
-        '''
-        This method ensures that the "tagging_tag" table isn't
-        queried for each record.  For some reason, this doesn't
-        seem to slow down the Photo/Audio/Record tables in the
-        same way.  Mysterious.
-        '''
-        from django.contrib.contenttypes.models import ContentType
-        from collections import defaultdict
-        from tagging.models import TaggedItem
-
-        ctype = ContentType.objects.get_for_model(queryset.model)
-        tagitems = TaggedItem.objects.filter(
-            content_type=ctype,
-            object_id__in=queryset.values_list('pk', flat=True),
-        )
-        tagitems = tagitems.select_related('tag')
-        tags_map = defaultdict(list)
-        for tagitem in tagitems:
-            tags_map[tagitem.object_id].append(tagitem.tag)
-        for obj in queryset:
-            obj.tags = ', '.join([t.name for t in tags_map[obj.pk]])
-        return queryset
-
     def _get_objects(self, user, authority_id, project=None, request=None,
                      context=None, ordering_field='-time_stamp'):
         '''
@@ -137,7 +115,7 @@ class ObjectMixin(BaseMixin):
         return q
 
     def get_objects(self, user, project=None, request=None,
-                    context=None, ordering_field='-time_stamp'):
+                    context=None, ordering_field='-id'):
         return self._get_objects(
             user, 1, project=project, request=request,
             context=context, ordering_field=ordering_field
@@ -176,9 +154,9 @@ class GroupMixin(ObjectMixin):
     related_fields = [
         'owner',
         'last_updated_by',
-        'access_authority',
-        'tag',
-        'tags']
+        'access_authority',]
+        #'tag',
+        #'tags']
     #prefetch_fields = ['users__user']
     prefetch_fields = []
 

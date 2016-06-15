@@ -5,7 +5,7 @@
 {% endblock %}
 
 {% block script_links %}
-    <script type="text/javascript" src="http://maps.googleapis.com/maps/api/js?sensor=false&v=3.9"></script>
+    <script type="text/javascript" src="//maps.googleapis.com/maps/api/js?sensor=false&v=3.9"></script>
     <script type="text/javascript" src="/static/scripts/map/resources/mapTypes.js"></script>
 	<script type="text/javascript" src="/static/scripts/thirdparty/jquery.formset.js"></script>
     <script type="text/javascript" src="/static/scripts/map/basemap.js"></script>
@@ -22,10 +22,10 @@
         zoom: {{zoom}},
         serverURL: '{{serverURL}}', 
         overlays: {% autoescape off %}{{ overlays }}{% endautoescape %},
-        scans: {% autoescape off %}{{ scans }}{% endautoescape %},
+        mapimages: {% autoescape off %}{{ mapimages }}{% endautoescape %},
         forms: {% autoescape off %}{{ forms }}{% endautoescape %},
         isPrint: true,
-        initialMapLayerID: {{basemap_id}},
+        initialMapLayerID: {{basemap_id | default:"1"}},
         initial_overlays: {% autoescape off %}{{ layer_ids }}{% endautoescape %},
         layouts: {% autoescape off %}{{ layouts }}{% endautoescape %},
         selectedLayoutID: {{ selectedLayout_id }},
@@ -267,7 +267,7 @@ select { width: 180px !important; }
                     <div class="instructions" id="instructions" onclick="o.setInstructions();"
                          style="height:82px;margin-right: 5px;float:left;">{{instructions|default_if_none:"Click to enter instructions..."}}</div>
                     <textarea name="instructions" id="txtInstructions" class="instructions" style="height:72px;display:none;">{{instructions|default_if_none:""}}</textarea>
-                    <img src="http://chart.apis.google.com/chart?cht=qr&amp;chld=Q|0&amp;chl=lg&amp;chs=75x75" id="qrcode">
+                    <img src="//chart.apis.google.com/chart?cht=qr&amp;chld=Q|0&amp;chl=lg&amp;chs=75x75" id="qrcode">
                 </div>
             </div>
             
@@ -288,7 +288,7 @@ select { width: 180px !important; }
                 </div>
                 <div class="clearfix">
                     <div class="instructions" id="instructions_slave" style="float:left;width:654px;">&nbsp;</div>
-                    <img src="http://chart.apis.google.com/chart?cht=qr&amp;chld=Q|0&amp;chl=lg&amp;chs=75x75" id="qrcode">
+                    <img src="//chart.apis.google.com/chart?cht=qr&amp;chld=Q|0&amp;chl=lg&amp;chs=75x75" id="qrcode">
                 </div>
             </div>
             
@@ -299,7 +299,7 @@ select { width: 180px !important; }
                 <span>center_lat:</span><input id="center_lng" name="center_lng" value="{{ center_lng }}" /><br>
                 <span>center_lng:</span><input id="center_lat" name="center_lat" value="{{ center_lat }}" /><br>
                 <span>layer_ids:</span><input name="layer_ids" value="{{ layer_id_string|default_if_none:"" }}" /><br>
-                <span>scan_ids:</span><input name="scan_ids" value="{{ scan_id_string|default_if_none:"" }}" /><br>
+                <span>mapimage_ids:</span><input name="mapimage_ids" value="{{ mapimage_id_string|default_if_none:"" }}" /><br>
                 <span>map_provider:</span><input type="text" name="map_provider" value="{{ basemap_id }}" /><br>
                 <span>generate_pdf:</span><input type="text" name="generate_pdf" value="on" /><br>
                 <span>layout:</span><input type="text" name="layout" id="layout" value="{{selectedLayout}}" /><br>

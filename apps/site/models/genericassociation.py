@@ -10,11 +10,11 @@ class GenericAssociation(BaseAudit):
     """
     http://weispeaks.wordpress.com/2009/11/04/overcoming-limitations-in-django-using-generic-foreign-keys/
     Uses the contenttypes framework to create one big "meta-association table"
-    between media elements (photos, audio files, scans, etc.) and groups.  See
+    between media elements (photos, audio files, mapimages, etc.) and groups.  See
     the reference above for more information about the contenttypes framework.
     """
     ordering = models.IntegerField(default=1)
-    turned_on = models.BooleanField()
+    turned_on = models.BooleanField(default=False)
 
     # analogous to the "subject" in a triplet,
     # (e.g. "The 'source' has an 'entity.'")

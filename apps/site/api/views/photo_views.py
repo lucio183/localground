@@ -21,14 +21,13 @@ class PhotoFilter(django_filters.FilterSet):
 
 
 class PhotoList(MediaList):
-    ext_whitelist = ['jpg', 'jpeg', 'gif', 'png']
     serializer_class = serializers.PhotoSerializer
     model = models.Photo
     filter_class = PhotoFilter
 
 
 class PhotoInstance(MediaInstance):
-    serializer_class = serializers.PhotoSerializer
+    serializer_class = serializers.PhotoSerializerUpdate
     model = models.Photo
 
 
@@ -39,7 +38,7 @@ def rotate_left(request, pk, format='html'):
         photo = models.Photo.objects.get(id=pk)
         photo.rotate_left(request.user)
 
-        return Response(serializers.PhotoSerializer(photo).data,
+        return Response(serializers.PhotoSerializer(photo, context=context).data,
                         status=status.HTTP_200_OK)
     except models.Photo.DoesNotExist:
         return Response(
@@ -52,7 +51,7 @@ def rotate_right(request, pk, format='html'):
     try:
         photo = models.Photo.objects.get(id=pk)
         photo.rotate_right(request.user)
-        return Response(serializers.PhotoSerializer(photo).data,
+        return Response(serializers.PhotoSerializer(photo, context=context).data,
                         status=status.HTTP_200_OK)
     except models.Photo.DoesNotExist:
         return Response(

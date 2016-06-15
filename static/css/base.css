@@ -38,6 +38,7 @@
     max-width: 600px;
     margin-top:1px;
     border-top: solid 1px #ddd;
+    overflow-y: auto;
 }
 #filter-menu .clearfix {
     width: 220px;
@@ -62,4 +63,31 @@
     width: 338px;
     margin-left: 80px;
     height: 70px;
+}
+
+.form-group {
+    margin-bottom: 10px;
+}
+
+.control-label {
+    margin-right: 20px;
+}
+.help-block {
+    margin-left: 152px;
+}
+
+.fileinput-button input {
+    position: absolute;
+    margin-left: -20px;
+    margin-top: -20px;
+    border: solid transparent;
+    opacity: 0;
+    filter: alpha(opacity=0);
+    -moz-transform: translate(-300px, 0) scale(4);
+    direction: ltr;
+    cursor: pointer;
+}
+
+select {
+    width: 220px;
 }

@@ -4,11 +4,10 @@ from datetime import datetime
 from localground.apps.site.managers import MarkerManager
 from localground.apps.site.models import BaseUploadedMedia
 from django.contrib.contenttypes import generic
-from localground.apps.site.models import BasePoint, BaseNamed, \
+from localground.apps.site.models import BasePointMixin, ExtrasMixin, BaseNamed, \
     BaseGenericRelationMixin, ReturnCodes
 
-
-class Marker(BasePoint, BaseNamed, BaseGenericRelationMixin):
+class Marker(ExtrasMixin, BasePointMixin, BaseNamed, BaseGenericRelationMixin):
 
     """
     Markers are association objects with a geometry (either point,
@@ -26,57 +25,11 @@ class Marker(BasePoint, BaseNamed, BaseGenericRelationMixin):
     color = models.CharField(max_length=6)
     _records_dict = None
     objects = MarkerManager()
+    filter_fields = ('id', 'project', 'name', 'descrption', 'tags',)
 
     @property
     def geometry(self):
         return self.point or self.polyline or self.polygon
-
-    @classmethod
-    def filter_fields(cls):
-        #white_list = ()
-        # for f in Photo._meta.fields: print '%s: %s: %s' % (f.name,
-        # f.verbose_name, f.db_type())
-        from localground.apps.lib.helpers import QueryField, FieldTypes
-        #owner, last_updated_by, date_created, time_stamp, file_name_orig, name,
-        #description, tags, project, attribution
-        return [
-            QueryField(
-                'project__id',
-                id='project_id',
-                title='Project ID',
-                data_type=FieldTypes.INTEGER),
-            QueryField(
-                'name',
-                id='name',
-                title='Name',
-                operator='like'),
-            QueryField(
-                'description',
-                id='description',
-                title='Description',
-                operator='like'),
-            QueryField(
-                'tags',
-                id='tags',
-                title='Tags',
-                data_type=FieldTypes.TAG,
-                operator='in'),
-            QueryField(
-                'owner__username',
-                id='owned_by',
-                title='Owned By'),
-            QueryField(
-                'date_created',
-                id='date_created_after',
-                title='After',
-                data_type=FieldTypes.DATE,
-                operator='>='),
-            QueryField(
-                'date_created',
-                id='date_created_before',
-                title='Before',
-                data_type=FieldTypes.DATE,
-                operator='<=')]
 
     @classmethod
     def create_instance(user, project, lat, lng, name=None):

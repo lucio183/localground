@@ -4,6 +4,7 @@ from django.contrib.auth.models import User
 from localground.apps.site.models.permissions import ObjectAuthority
 from localground.apps.site.models.groups import Project
 from datetime import datetime
+from django.conf import settings
 
 
 class UserProfile(models.Model):
@@ -23,7 +24,6 @@ class UserProfile(models.Model):
     contacts = models.ManyToManyField(
         'auth.User',
         related_name='%(app_label)s_%(class)s_related',
-        null=True,
         blank=True,
         verbose_name="Users You're Following")
     date_created = models.DateTimeField(default=datetime.now)
@@ -79,7 +79,8 @@ def create_profile_on_insert(sender, instance, created, **kwargs):
     # project.  Works just like a database trigger.
 
     if created:
-        try:
+        UserProfile.create(instance)
+        '''try:
             UserProfile.create(instance)
         except Exception:
             # Makes sure if the user isn't the very first user created,
@@ -90,6 +91,7 @@ def create_profile_on_insert(sender, instance, created, **kwargs):
             if instance.id != 1:
                 raise Exception('UserProfile not created')
             pass
+        '''
 
 
 signals.post_save.connect(create_profile_on_insert, sender=User)

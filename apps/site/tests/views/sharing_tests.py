@@ -9,7 +9,7 @@ from rest_framework import status
 class ObjectShareFormProfileTest(test.TestCase, ViewMixin):
 
     def setUp(self):
-        ViewMixin.setUp(self)
+        ViewMixin.setUp(self, load_fixtures=False)
         self.urls = [
             '/profile/projects/1/share/',
             '/profile/projects/1/share/embed/',
@@ -75,9 +75,9 @@ class ObjectShareFormProfileTest(test.TestCase, ViewMixin):
             'access_authority': self.project.access_authority.id,
             'owner_autocomplete': self.project.owner.username,
             'slug': slug,
-            'groupuser-0-id': 1,
+            'groupuser-0-id': user_ids[0],
             'groupuser-0-user_autocomplete': 'test1',
-            'groupuser-0-authority': user_ids[0],
+            'groupuser-0-authority': 2,
             'groupuser-0-DELETE': 'on',
             'groupuser-1-id': user_ids[1],
             'groupuser-1-user_autocomplete': 'test2',
@@ -96,7 +96,7 @@ class ObjectShareFormProfileTest(test.TestCase, ViewMixin):
             data=urllib.urlencode(data),
             HTTP_X_CSRFTOKEN=self.csrf_token,
             content_type="application/x-www-form-urlencoded")
-
+        
         # successfully redirected
         self.assertEqual(response.status_code, status.HTTP_302_FOUND)
 

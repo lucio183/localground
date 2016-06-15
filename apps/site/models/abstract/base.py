@@ -5,7 +5,8 @@ from django.contrib.contenttypes.models import ContentType
 
 
 class Base(models.Model):
-
+    filter_fields = ('id',)
+    
     class Meta:
         app_label = 'site'
         abstract = True
@@ -53,6 +54,30 @@ class Base(models.Model):
                 except:
                     pass
         raise Http404
+    
+    @classmethod
+    def get_filter_fields(cls):
+        from localground.apps.lib.helpers import QueryField, FieldTypes
+        
+        def get_data_type(model_field):
+            data_types = {
+                'AutoField': FieldTypes.INTEGER,
+                'ForeignKey': FieldTypes.INTEGER,
+                'CharField': FieldTypes.STRING,
+                'DateTimeField': FieldTypes.DATE,
+                'PointField': FieldTypes.POINT
+            }
+            return data_types.get(model_field.get_internal_type()) or model_field.get_internal_type()
+        query_fields = {}
+        for field in cls.filter_fields:
+            for f in cls._meta.fields:
+                if f.name == field:
+                    query_fields[f.name] = QueryField(
+                        f.name, django_fieldname=f.name, title=f.verbose_name,
+                        help_text=f.help_text, data_type=get_data_type(f)
+                    )
+        #raise Exception(query_fields)
+        return query_fields
 
     @classproperty
     def model_name(cls):
@@ -108,10 +133,10 @@ class Base(models.Model):
         return self._get_filtered_entities(cls)
 
     def get_form_ids(self):
-        from localground.apps.site.models import Photo, Audio, Scan
+        from localground.apps.site.models import Photo, Audio, MapImage
         content_ids = [
             ct.id for ct in
-            ContentType.objects.get_for_models(Photo, Audio, Scan).values()
+            ContentType.objects.get_for_models(Photo, Audio, MapImage).values()
         ]
         return (
             self.entities
@@ -124,16 +149,16 @@ class Base(models.Model):
         """
         Private method that queries the GenericAssociation model for
         references to the current view for a given media type (Photo,
-        Audio, Video, Scan, Marker).
+        Audio, Video, MapImage, Marker).
         """
         qs = (self.entities
               .filter(entity_type=cls.get_content_type())
               .order_by('ordering',))
         ids = [rec.entity_id for rec in qs]
-        objects = cls.objects.select_related(
-            'project',
-            'project__owner',
-            'owner').filter(
+        related_fields = ['owner']
+        if hasattr(cls, 'project'):
+            related_fields.extend(['project', 'project__owner'])
+        objects = cls.objects.select_related(*related_fields).filter(
             id__in=ids)
 
         entities = []

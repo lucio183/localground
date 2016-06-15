@@ -1,28 +1,39 @@
 from localground.apps.site.api.serializers.base_serializer import BaseNamedSerializer
 from localground.apps.site.api.serializers.field_serializer import FieldSerializer
-import datetime
 from django.conf import settings
-from rest_framework import serializers
-from localground.apps.site import widgets, models
-from localground.apps.site.api import fields
-
+from rest_framework import serializers, validators
+from localground.apps.site import models
 
 class FormSerializerList(BaseNamedSerializer):
-    project_ids = fields.ProjectsField(
-        label='project_ids',
-        source='projects',
-        required=True,
-        help_text='A comma-separated list of all of the projects to which this form should belong'
+    
+    def get_fields(self, *args, **kwargs):
+        fields = super(FormSerializerList, self).get_fields(*args, **kwargs)
+        #restrict project list at runtime:
+        fields['project_ids'].child_relation.queryset = self.get_projects()
+        return fields
+    
+    project_ids = serializers.PrimaryKeyRelatedField(
+        many=True,
+        queryset=models.Project.objects.all(), #note: queryset restricted at runtime (above)
+        source='projects'
     )
-    data_url = serializers.SerializerMethodField('get_data_url')
+    data_url = serializers.SerializerMethodField()
+    fields_url = serializers.SerializerMethodField()
+    slug = serializers.SlugField(
+        max_length=100,
+        label='friendly url'
+    )
 
     class Meta:
         model = models.Form
-        fields = BaseNamedSerializer.Meta.fields + ('data_url', 'project_ids')
+        fields = BaseNamedSerializer.Meta.fields + ('data_url', 'fields_url', 'slug', 'project_ids') 
         depth = 0
 
     def get_data_url(self, obj):
         return '%s/api/0/forms/%s/data/' % (settings.SERVER_URL, obj.pk)
+    
+    def get_fields_url(self, obj):
+        return '%s/api/0/forms/%s/fields/' % (settings.SERVER_URL, obj.pk)
 
 
 class FormSerializerDetail(FormSerializerList):
@@ -38,101 +49,3 @@ class FormSerializerDetail(FormSerializerList):
             obj.fields, many=True,
             context={'request': {}}).data
 
-# BaseNamedSerializer?
-
-
-class BaseRecordSerializer(serializers.ModelSerializer):
-
-    geometry = fields.GeometryField(help_text='Assign a GeoJSON string',
-                                    required=False,
-                                    widget=widgets.JSONWidget)
-    overlay_type = serializers.SerializerMethodField('get_overlay_type')
-    url = serializers.SerializerMethodField('get_detail_url')
-    project_id = fields.ProjectField(
-        label='project_id',
-        source='project',
-        required=False)
-
-    class Meta:
-        fields = (
-            'id',
-            'overlay_type',
-            'url',
-            'geometry',
-            'manually_reviewed',
-            'project_id')
-        read_only_fields = ('manually_reviewed',)
-
-    def get_overlay_type(self, obj):
-        return obj._meta.verbose_name
-
-    def get_detail_url(self, obj):
-        return '%s/api/0/forms/%s/data/%s/' % (settings.SERVER_URL,
-                                               obj.form.id, obj.id)
-
-
-def create_record_serializer(form):
-    """
-    generate a dynamic serializer from dynamic model
-    """
-    form_fields = []
-    form_fields.append(form.get_num_field())
-    form_fields.extend(list(form.fields))
-
-    field_names = [f.col_name for f in form_fields]
-
-    class FormDataSerializer(BaseRecordSerializer):
-
-        class Meta:
-            from django.forms import widgets
-
-            model = form.TableModel
-            fields = BaseRecordSerializer.Meta.fields + tuple(field_names)
-            read_only_fields = BaseRecordSerializer.Meta.read_only_fields
-
-    return FormDataSerializer
-
-
-def create_compact_record_serializer(form):
-    """
-    generate a dynamic serializer from dynamic model
-    """
-    col_names = [f.col_name for f in form.fields]
-
-    class FormDataSerializer(BaseRecordSerializer):
-        recs = serializers.SerializerMethodField('get_recs')
-        url = serializers.SerializerMethodField('get_detail_url')
-        project_id = serializers.SerializerMethodField('get_project_id')
-
-        class Meta:
-            model = form.TableModel
-            fields = (
-                'id',
-                'num',
-                'recs',
-                'url',
-                'geometry',
-                'project_id',
-                'overlay_type')
-
-        def get_recs(self, obj):
-            # return [getattr(obj, col_name) for col_name in col_names]
-            recs = []
-            for col_name in col_names:
-                val = getattr(obj, col_name)
-                if isinstance(val, datetime.datetime):
-                    val = val.strftime('%m/%d/%Y, %I:%M:%S %p')
-                recs.append(val)
-            return recs
-
-        def get_detail_url(self, obj):
-            return '%s/api/0/forms/%s/data/%s/' % (settings.SERVER_URL,
-                                                   form.id, obj.id)
-
-        def get_project_id(self, obj):
-            return obj.project.id
-
-        def get_overlay_type(self, obj):
-            return 'record'
-
-    return FormDataSerializer

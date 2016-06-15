@@ -9,7 +9,6 @@ import urllib
 
 
 class BatchQueryGroupMixin(ModelMixin):
-    fixtures = ['initial_data.json', 'test_data.json']
     model = models.Group
 
     def setUp(self):
@@ -17,7 +16,7 @@ class BatchQueryGroupMixin(ModelMixin):
         # are owned by self.owner.  A unique, private project
         # will be assigned to each form.
 
-        ModelMixin.setUp(self)
+        ModelMixin.setUp(self, load_fixtures=False)
 
         # create 3 users:
         self.users = [self.create_user(username=u)
@@ -28,6 +27,9 @@ class BatchQueryGroupMixin(ModelMixin):
 
         # create 2 groups:
         self._create_groups()
+        
+    def tearDown(self):
+        models.Form.objects.all().delete()
 
     def _debug(self):
         fus = FormUser.objects.filter(form=self.group1)
@@ -139,6 +141,12 @@ class BatchProjectQuerySecurityTest(test.TestCase, BatchQueryGroupMixin):
 
     def setUp(self):
         BatchQueryGroupMixin.setUp(self)
+        
+    
+    def tearDown(self):
+        BatchQueryGroupMixin.tearDown(self)
+    
+
 
     def _create_groups(self):
         # delete all projects in database:
@@ -155,6 +163,11 @@ class BatchProjectQuerySecurityTest(test.TestCase, BatchQueryGroupMixin):
             name='Project #2',
             authority_id=1
         )
+        self.form = self.create_form_with_fields(
+            user=self.owner,
+            authority_id=1,
+            project=self.group1
+        )
 
 
 class BatchFormQuerySecurityTest(test.TestCase, BatchQueryGroupMixin):
@@ -162,6 +175,9 @@ class BatchFormQuerySecurityTest(test.TestCase, BatchQueryGroupMixin):
 
     def setUp(self):
         BatchQueryGroupMixin.setUp(self)
+        
+    def tearDown(self):
+        BatchQueryGroupMixin.tearDown(self)
 
     def _create_groups(self):
         self.project1 = self.create_project(
@@ -251,22 +267,25 @@ class BatchFormQuerySecurityTest(test.TestCase, BatchQueryGroupMixin):
 
 
 class BatchViewQuerySecurityTest(test.TestCase, BatchQueryGroupMixin):
-    model = models.View
+    model = models.Snapshot
 
     def setUp(self):
         BatchQueryGroupMixin.setUp(self)
+        
+    def tearDown(self):
+        BatchQueryGroupMixin.tearDown(self)
 
     def _create_groups(self):
         # delete all views in database:
-        models.View.objects.all().delete()
+        models.Snapshot.objects.all().delete()
 
         # and add two new ones:
-        self.group1 = self.create_view(
+        self.group1 = self.create_snapshot(
             self.owner,
             name='View #1',
             authority_id=1
         )
-        self.group2 = self.create_view(
+        self.group2 = self.create_snapshot(
             self.owner,
             name='View #2',
             authority_id=1

@@ -1,7 +1,6 @@
 from django.contrib.gis.db import models
 from localground.apps.site.models import Base
 
-
 class DataType(Base):
     TEXT = 1
     INTEGER = 2
@@ -9,9 +8,11 @@ class DataType(Base):
     BOOL = 4
     DECIMAL = 5
     RATING = 6
+    PHOTO = 7
+    AUDIO = 8
 
-    name = models.CharField(max_length=255)
-    sql = models.CharField(max_length=500)
+    name = models.CharField(max_length=255, editable=False)
+    sql = models.CharField(max_length=500, editable=False)
 
     def to_dict(self):
         return dict(

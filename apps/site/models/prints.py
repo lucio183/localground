@@ -5,7 +5,7 @@ from localground.apps.site.models.abstract.media import BaseMedia
 from localground.apps.site.models.abstract.mixins import ProjectMixin, BaseGenericRelationMixin
 from localground.apps.site.models.abstract.geometry import BaseExtents
 from PIL import Image
-from tagging_autocomplete.models import TagAutocompleteField
+from django.contrib.postgres.fields import ArrayField
 from django.contrib.gis.geos import Polygon
 
 
@@ -19,7 +19,7 @@ class Print(BaseExtents, BaseMedia, ProjectMixin, BaseGenericRelationMixin):
         null=True,
         blank=True,
         verbose_name="Instructions")
-    tags = TagAutocompleteField(blank=True, null=True)
+    tags = ArrayField(models.TextField(), default=list)
     map_provider = models.ForeignKey(
         'WMSOverlay',
         db_column='fk_provider',
@@ -30,52 +30,13 @@ class Print(BaseExtents, BaseMedia, ProjectMixin, BaseGenericRelationMixin):
     map_image_path = models.CharField(max_length=255)
     pdf_path = models.CharField(max_length=255)
     preview_image_path = models.CharField(max_length=255)
-    form_column_widths = models.CharField(
-        max_length=200,
-        null=True,
-        blank=True)
-    sorted_field_ids = models.CharField(max_length=100, null=True, blank=True,
-                                        db_column='form_column_ids')
-    form = models.ForeignKey('Form', null=True, blank=True)
     deleted = models.BooleanField(default=False)
-    #layers = models.ManyToManyField('WMSOverlay', null=True, blank=True)
+    
+    filter_fields = BaseMedia.filter_fields + ('name', 'description', 'tags', 'uuid')
+
     objects = PrintManager()
 
-    @classmethod
-    def filter_fields(cls):
-        from localground.apps.lib.helpers import QueryField, FieldTypes
-        return [
-            QueryField(
-                'project__id',
-                id='project_id',
-                title='Project ID',
-                data_type=FieldTypes.INTEGER),
-            QueryField(
-                'map_title',
-                id='map_title',
-                title='Map Title',
-                operator='like'),
-            QueryField(
-                'owner__username',
-                id='owned_by',
-                title='Owned By'),
-            QueryField(
-                'map_image_path',
-                id='map_image_path',
-                title='File Name'),
-            QueryField(
-                'date_created',
-                id='date_created_after',
-                title='After',
-                data_type=FieldTypes.DATE,
-                operator='>='),
-            QueryField(
-                'date_created',
-                id='date_created_before',
-                title='Before',
-                data_type=FieldTypes.DATE,
-                operator='<=')]
-
+   
     @classmethod
     def inline_form(cls, user):
         from localground.apps.site.forms import get_inline_form_with_tags
@@ -83,26 +44,25 @@ class Print(BaseExtents, BaseMedia, ProjectMixin, BaseGenericRelationMixin):
 
     @property
     def embedded_layers(self):
+        #raise Exception('emdedded')
         from localground.apps.site.models import WMSOverlay
         if not hasattr(self, '_embedded_layers'):
             self._embedded_layers = self.grab(WMSOverlay)
         return self._embedded_layers
 
     @property
-    def embedded_scans(self):
-        from localground.apps.site.models import Scan
-        if not hasattr(self, '_embedded_scans'):
-            self._embedded_scans = self.grab(Scan)
-        return self._embedded_scans
-
-    def get_form_field_layout(self):
-        return self.fieldlayout_set.all()
+    def embedded_mapimages(self):
+        from localground.apps.site.models import MapImage
+        if not hasattr(self, '_embedded_mapimages'):
+            self._embedded_mapimages = self.grab(MapImage)
+        return self._embedded_mapimages
 
     def get_abs_directory_path(self):
         return '%s%s' % (settings.FILE_ROOT, self.virtual_path)
 
     def get_abs_virtual_path(self):
-        return 'http://%s%s' % (self.host, self.virtual_path)
+        return '//%s%s' % (self.host, self.virtual_path)
+        #return '%s%s' % (settings.SERVER_URL, self.virtual_path)
 
     def generate_relative_path(self):
         return '/%s/%s/%s/' % (settings.USER_MEDIA_DIR,
@@ -118,9 +78,10 @@ class Print(BaseExtents, BaseMedia, ProjectMixin, BaseGenericRelationMixin):
             'project_id': self.project.id,
             'map_title': self.name.encode('utf8'),
             'instructions': self.description.encode('utf8'),
-            'scan_ids': ','.join([str(s.id) for s in self.embedded_scans])
+            'mapimage_ids': ','.join([str(s.id) for s in self.embedded_mapimages])
         })
-        return 'http://' + self.host + '/maps/print/?' + data
+        return '//' + self.host + '/maps/print/?' + data
+        #return settings.SERVER_URL + '/maps/print/?' + data
 
     def thumb(self):
         path = '%s%s' % (self.virtual_path, self.preview_image_path)
@@ -145,7 +106,7 @@ class Print(BaseExtents, BaseMedia, ProjectMixin, BaseGenericRelationMixin):
         dict = {
             'id': self.uuid,
             'uuid': self.uuid,
-            'map_title': self.map_title,
+            'map_title': self.name,
             'pdf': self.pdf(),
             'thumbnail': self.thumb(),
             #'kml': '/' + settings.USER_MEDIA_DIR + '/prints/' + self.id + '/' + self.id + '.kml',
@@ -173,19 +134,19 @@ class Print(BaseExtents, BaseMedia, ProjectMixin, BaseGenericRelationMixin):
             groups = self.get_map_groups()
             dict.update({'map_groups': [g.to_dict() for g in groups]})
         if include_processed_maps:
-            dict.update({'processed_maps': self.get_scans(to_dict=True)})
+            dict.update({'processed_maps': self.get_mapimages(to_dict=True)})
         if include_markers:
             dict.update({'markers': self.get_marker_dictionary_list()})
         return dict
 
-    def get_scans(self, to_dict=False):
-        from localground.apps.site.models import Scan
-        scans = list(Scan.objects.filter(deleted=False)
+    def get_mapimages(self, to_dict=False):
+        from localground.apps.site.models import MapImage
+        mapimages = list(MapImage.objects.filter(deleted=False)
                                  .filter(source_print=self)
                                  .order_by('-time_stamp'))
         if to_dict:
-            return [s.to_dict() for s in scans]
-        return scans
+            return [s.to_dict() for s in mapimages]
+        return mapimages
 
     def delete(self, *args, **kwargs):
         # first remove directory, then delete from db:
@@ -197,7 +158,11 @@ class Print(BaseExtents, BaseMedia, ProjectMixin, BaseGenericRelationMixin):
             if os.path.exists(dest):
                 from localground.apps.lib.helpers import generic
                 dest = dest + '.dup.' + generic.generateID()
-            shutil.move(path, dest)
+            try:
+                shutil.move(path, dest)
+            except:
+                #pass
+                raise Exception('error moving path from %s to %s' % (path, dest))
 
         super(Print, self).delete(*args, **kwargs)
 
@@ -213,16 +178,16 @@ class Print(BaseExtents, BaseMedia, ProjectMixin, BaseGenericRelationMixin):
     @classmethod
     def insert_print_record(cls, user, project, layout, map_provider, zoom,
                             center, host, map_title=None, instructions=None,
-                            form=None, layer_ids=None, scan_ids=None,
+                            layer_ids=None, mapimage_ids=None,
                             do_save=True):
         from localground.apps.site import models
         from localground.apps.lib.helpers import generic, StaticMap
 
-        layers, scans = None, None
+        layers, mapimages = None, None
         if layer_ids is not None:
             layers = models.WMSOverlay.objects.filter(id__in=layer_ids)
-        if scan_ids is not None:
-            scans = models.Scan.objects.filter(id__in=scan_ids)
+        if mapimage_ids is not None:
+            mapimages = models.MapImage.objects.filter(id__in=mapimage_ids)
         if instructions is not None:  # preserve line breaks in the pdf report
             instructions = '<br/>'.join(instructions.splitlines())
 
@@ -262,20 +227,20 @@ class Print(BaseExtents, BaseMedia, ProjectMixin, BaseGenericRelationMixin):
         p.southwest = southwest
         p.extents = extents
         p.virtual_path = p.generate_relative_path()
-        if layout.is_data_entry and form is not None:
-            p.form = form
+        #raise Exception(p.to_dict())
 
         if do_save:
             p.save()
+            # todo: come back to this (if we want MapServer to render layers)
             if layers:
                 for layer in layers:
                     p.stash(l, user)
-            if scans:
-                for scan in scans:
-                    p.stash(scan, user)
+            if mapimages:
+                for mapimage in mapimages:
+                    p.stash(mapimage, user)
         return p
 
-    def generate_pdf(self, has_extra_form_page=False):
+    def generate_pdf(self):
         from localground.apps.site import models
         from localground.apps.lib.helpers import generic, StaticMap, Report
         import os
@@ -290,7 +255,7 @@ class Print(BaseExtents, BaseMedia, ProjectMixin, BaseGenericRelationMixin):
         file_name = 'Print_' + self.uuid + '.pdf'
 
         layers = self.embedded_layers
-        scans = self.embedded_scans
+        mapimages = self.embedded_mapimages
 
         info = m.get_basemap_and_extents(
             self.map_provider, self.zoom, self.center, map_width, map_height)
@@ -307,7 +272,7 @@ class Print(BaseExtents, BaseMedia, ProjectMixin, BaseGenericRelationMixin):
             layers,
             southwest=southwest,
             northeast=northeast,
-            scans=scans,
+            mapimages=mapimages,
             height=map_height,
             width=map_width,
             show_north_arrow=True)
@@ -337,12 +302,6 @@ class Print(BaseExtents, BaseMedia, ProjectMixin, BaseGenericRelationMixin):
             path,
             qr_size,
             border_width)
-        qr_image_2 = StaticMap.generate_qrcode(
-            self.uuid,
-            2,
-            path,
-            qr_size,
-            border_width)
         qr_size = qr_image_1.size[0]
 
         # generate PDF
@@ -363,37 +322,12 @@ class Print(BaseExtents, BaseMedia, ProjectMixin, BaseGenericRelationMixin):
         if self.layout.is_data_entry:
             pdf_report.add_footer(qr_image_1, self.uuid, self.description)
 
-        # add form:
-        if self.layout.is_mini_form and self.form is not None:
-            pdf_report.add_form(4, self.form, self, is_mini_form=True)
-
         # add map:
-        pdf_report.add_map(map_image, is_data_entry=self.layout.is_data_entry,
-                           has_mini_form=self.layout.is_mini_form)
+        pdf_report.add_map(map_image, is_data_entry=self.layout.is_data_entry)
 
         # add header:
         pdf_report.add_header(
             is_data_entry=self.layout.is_data_entry,
             is_map_page=True)
-
-        ##########
-        # Page 2 #
-        ##########
-        if has_extra_form_page:
-            pdf_report.new_page()
-
-            # reorient back to portrait:
-            pdf_report.set_orientation(False)
-
-            # add footer:
-            pdf_report.add_footer(qr_image_2, self.uuid, self.description)
-
-            # add form:
-            pdf_report.add_form(13, self.form, self, is_mini_form=False)
-
-            # add header:
-            pdf_report.add_header(
-                is_data_entry=self.layout.is_data_entry,
-                is_map_page=False)
 
         pdf_report.save()

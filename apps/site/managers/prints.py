@@ -5,22 +5,21 @@ from django.db.models import Count
 from localground.apps.site.managers.base import ObjectMixin
 
 
-class PrintPermissionsQuerySet(QuerySet, ObjectMixin):
-    pass
+#class PrintPermissionsQuerySet(QuerySet, ObjectMixin):
+#    pass
 
 
 class PrintPermissionsManager(models.GeoManager, ObjectMixin):
-
-    def get_query_set(self):
-        return PrintPermissionsQuerySet(self.model, using=self._db)
-
+    #def get_queryset(self):
+    #    return PrintPermissionsQuerySet(self.model, using=self._db)
+    pass
 
 class PrintMixin(ObjectMixin):
     related_fields = ['project', 'owner', 'last_updated_by', 'map_provider']
 
-    def to_dict_list(self, include_scan_counts=False):
-        if include_scan_counts:
-            return [dict(p.to_dict(), num_scans=p.num_scans or 0)
+    def to_dict_list(self, include_mapimage_counts=False):
+        if include_mapimage_counts:
+            return [dict(p.to_dict(), num_mapimages=p.num_mapimages or 0)
                     for p in self]
         else:
             return [p.to_dict() for p in self]
@@ -38,7 +37,7 @@ class PrintMixin(ObjectMixin):
                 return []
 
         sql = 'select id, ST_AsGeoJson(northeast) as ne, ST_AsGeoJson(southwest) as sw, \
-              map_title, count(id) as num_scans from prints, scans_scan \
+              map_title, count(id) as num_mapimages from prints, mapimages_mapimage \
             where id = source_print_id and '
         sql = sql + str("SE_EnvelopesIntersect(extents, GeomFromText('POLYGON((" +
                         west + ' ' + north + ', ' +
@@ -59,32 +58,17 @@ class PrintMixin(ObjectMixin):
                 'north': json.loads(p.ne)['coordinates'][1],
                 'west': json.loads(p.sw)['coordinates'][0],
                 'south': json.loads(p.sw)['coordinates'][1],
-                'num_scans': p.num_scans,
+                'num_mapimages': p.num_mapimages,
                 'map_title': p.map_title
             })
 
         return return_obj
-
-        '''poly = Polygon(((west, north), (east, north), (east, south), (west, south), (west, north)))
-        poly.srid = srid=4326
-        scans = list(Scan.objects
-                    .filter(source_print__deleted=False)
-                    .filter(deleted=False)
-                    .filter(source_print__isnull=False)
-                    .filter(source_print__northeast__intersects=poly)
-                    #.select_related()
-                    .values('source_print__id',)# 'source_print__extents')
-                    .annotate(num_scans=Count('id'))
-                )
-        
-        '''
-
 
 class PrintQuerySet(QuerySet, PrintMixin):
     pass
 
 
 class PrintManager(models.GeoManager, PrintMixin):
-
-    def get_query_set(self):
+    def get_queryset(self):
         return PrintQuerySet(self.model, using=self._db)
+

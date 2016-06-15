@@ -1,11 +1,10 @@
 from rest_framework import generics
 from localground.apps.site.api import serializers, filters
-from localground.apps.site.api.views.abstract_views import \
-    AuditCreate, AuditUpdate, QueryableListCreateAPIView
+from localground.apps.site.api.views.abstract_views import QueryableListCreateAPIView
 from localground.apps.site import models
 
 
-class PresentationList(QueryableListCreateAPIView, AuditCreate):
+class PresentationList(QueryableListCreateAPIView):
     serializer_class = serializers.PresentationSerializer
     filter_backends = (filters.SQLFilterBackend,)
     model = models.Presentation
@@ -19,14 +18,13 @@ class PresentationList(QueryableListCreateAPIView, AuditCreate):
                 access_key=self.request.GET.get('access_key')
             )
 
-    def pre_save(self, obj):
-        AuditCreate.pre_save(self, obj)
-        obj.access_authority = models.ObjectAuthority.objects.get(id=1)
+    def perform_create(self, serializer):
+        d = {
+            'access_authority': models.ObjectAuthority.objects.get(id=1)
+        }
+        serializer.save(**d)
 
 
-class PresentationInstance(generics.RetrieveUpdateDestroyAPIView, AuditUpdate):
+class PresentationInstance(generics.RetrieveUpdateDestroyAPIView):
     queryset = models.Presentation.objects.select_related('owner').all()
     serializer_class = serializers.PresentationSerializer
-
-    def pre_save(self, obj):
-        AuditUpdate.pre_save(self, obj)

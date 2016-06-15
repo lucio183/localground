@@ -8,9 +8,11 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
   # All Vagrant configuration is done here. The most common configuration
   # options are documented and commented below. For a complete reference,
   # please see the online documentation at vagrantup.com.
+  
+  config.vm.hostname = 'vagrant.host'
 
   # Every Vagrant virtual environment requires a box to build off of.
-  config.vm.box = "hashicorp/precise64"
+  config.vm.box = "ubuntu/trusty64"
   config.vm.provision :shell, path: "deploy_tools/bootstrap.sh"
   #config.vm.network :forwarded_port, host: 4567, guest: 80
   
@@ -23,10 +25,12 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
   # within the machine from a port on the host machine. In the example below,
   # accessing "localhost:7777" will access port 80 on the guest machine.
   config.vm.network "forwarded_port", guest: 80, host: 7777
+  config.vm.network "forwarded_port", guest: 5555, host: 5555
+  # config.vm.network :forwarded_port, guest: 5432, host: 1234
 
   # Create a private network, which allows host-only access to the machine
   # using a specific IP.
-  # config.vm.network "private_network", ip: "192.168.33.10"
+  config.vm.network "private_network", ip: "192.168.33.10"
 
   # Create a public network, which generally matched to bridged network.
   # Bridged networks make the machine appear as another physical device on
@@ -49,11 +53,11 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
   # Example for VirtualBox:
   #
   config.vm.provider "virtualbox" do |vb|
-  #   # Don't boot with headless mode
+     # Don't boot with headless mode
      vb.gui = true
-  #
-  #   # Use VBoxManage to customize the VM. For example to change memory:
-  #   vb.customize ["modifyvm", :id, "--memory", "1024"]
+
+     # Use VBoxManage to customize the VM. For example to change memory:
+     vb.customize ["modifyvm", :id, "--memory", "2048"]
   end
   #
   # View the documentation for the provider you're using for more

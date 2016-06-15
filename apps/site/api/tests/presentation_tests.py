@@ -5,25 +5,37 @@ from localground.apps.site.api.tests.base_tests import ViewMixinAPI
 import urllib
 import json
 from rest_framework import status
+from localground.apps.site.api.fields.list_field import convert_tags_to_list
 
-
-class ApiPresentationTest(test.TestCase, ViewMixinAPI):
+class ApiPresentationTest(object):
     name = 'New Presentation'
     description = 'description of presentation'
     tags = "a, b, c"
     slug = 'new-friendly-url'
+    metadata = {
+        'code': {'read_only': False, 'required': False, 'type': 'json'},
+        'caption': {'read_only': False, 'required': False, 'type': 'memo'},
+        'tags': {'read_only': False, 'required': False, 'type': 'field'},
+        'url': {'read_only': True, 'required': False, 'type': 'field'},
+        'overlay_type': {'read_only': True, 'required': False, 'type': 'field'},
+        'slug': {'read_only': False, 'required': True, 'type': 'slug'},
+        'owner': {'read_only': True, 'required': False, 'type': 'field'},
+        'id': {'read_only': True, 'required': False, 'type': 'integer'},
+        'name': {'read_only': False, 'required': False, 'type': 'string'}
+    }
 
     def _test_save_presentation(self, method, status_id, code):
+        d = {
+            'name': self.name,
+            'caption': self.description,
+            'tags': self.tags,
+            'slug': self.slug,
+            'code': json.dumps(code)
+        }
         response = method(self.url,
-                          data=urllib.urlencode({
-                              'name': self.name,
-                              'description': self.description,
-                              'tags': self.tags,
-                              'slug': self.slug,
-                              'code': code
-                          }),
+                          data=json.dumps(d),
                           HTTP_X_CSRFTOKEN=self.csrf_token,
-                          content_type="application/x-www-form-urlencoded"
+                          content_type="application/json"
                           )
         self.assertEqual(response.status_code, status_id)
 
@@ -35,12 +47,12 @@ class ApiPresentationTest(test.TestCase, ViewMixinAPI):
                 rec = self.model.objects.all().order_by('-id',)[0]
             self.assertEqual(rec.name, self.name)
             self.assertEqual(rec.description, self.description)
-            self.assertEqual(rec.tags, self.tags)
+            self.assertEqual(rec.tags, convert_tags_to_list(self.tags))
             self.assertEqual(rec.slug, self.slug)
             self.assertEqual(rec.code, code)
 
 
-class ApiPresentationListTest(ApiPresentationTest):
+class ApiPresentationListTest(test.TestCase, ViewMixinAPI, ApiPresentationTest):
 
     def setUp(self):
         ViewMixinAPI.setUp(self)
@@ -53,7 +65,7 @@ class ApiPresentationListTest(ApiPresentationTest):
         self._test_save_presentation(
             self.client_user.post,
             status.HTTP_201_CREATED,
-            json.dumps([])
+            {"test": 1}
         )
 
     def test_create_presentation_using_post_invalid_code(self, **kwargs):
@@ -64,7 +76,7 @@ class ApiPresentationListTest(ApiPresentationTest):
         )
 
 
-class ApiPresentationInstanceTest(ApiPresentationTest):
+class ApiPresentationInstanceTest(test.TestCase, ViewMixinAPI, ApiPresentationTest):
 
     def setUp(self):
         ViewMixinAPI.setUp(self)
@@ -81,7 +93,7 @@ class ApiPresentationInstanceTest(ApiPresentationTest):
         self._test_save_presentation(
             self.client_user.put,
             status.HTTP_200_OK,
-            json.dumps({'name': 'Berkeley'})
+            {'name': 'Berkeley'}
         )
 
     def test_update_presentation_using_patch(self, **kwargs):
@@ -116,7 +128,7 @@ class ApiPresentationInstanceTest(ApiPresentationTest):
         self._test_save_presentation(
             self.client_user.put,
             status.HTTP_200_OK,
-            json.dumps([{"a": "This is a test"}])
+            [{"a": "This is a test"}]
         )
 
         # and then get rid of them:

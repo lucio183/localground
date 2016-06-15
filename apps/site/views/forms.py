@@ -30,7 +30,13 @@ def create_update_form(request, object_id=None,
                 'col_alias',
                 'data_type',
                 'is_display_field',
-                'is_printable')
+                'ordering')
+            
+        def __init__(self, *args, **kwargs):
+            super(FieldForm, self).__init__(*args, **kwargs)
+            self.fields['is_display_field'].widget.attrs.update({
+                'class': 'is_display_field'
+            })
 
     from django.forms.models import inlineformset_factory
 
@@ -81,8 +87,6 @@ def create_update_form(request, object_id=None,
                 if form.has_changed():
                     instance = form.instance
                     if not instance in formset.deleted_forms:
-                        instance.display_width = 10
-                        instance.ordering = i
                         if instance.pk is None:
                             instance.form = form_object
                         instance.last_updated_by = request.user
@@ -94,7 +98,7 @@ def create_update_form(request, object_id=None,
             for form in formset.deleted_forms:
                 form.instance.delete()
 
-            form_object.clear_table_model_cache()
+            form_object.remove_table_from_cache()
 
             url = '/profile/forms/%s/' % form_object.id
             if embed:
@@ -105,7 +109,7 @@ def create_update_form(request, object_id=None,
             extras.update({
                 'success': False,
                 'error_message': 'There were errors when updating the %s information.  \
-								Please review message(s) below.' % Field.model_name
+                    Please review message(s) below.' % Field.model_name
             })
     else:
         form = Form.create_form(user=request.user)(instance=form_object)
@@ -128,23 +132,3 @@ def create_update_form(request, object_id=None,
     return render_to_response(template, extras,
                               context_instance=RequestContext(request))
 
-
-'''
-@process_identity
-def get_datatypes(request, identity=None):
-	from localground.apps.site.models import DataType
-	types = DataType.objects.all().order_by('name')
-	return HttpResponse(json.dumps(dict(
-		types=[t.to_dict() for t in types]
-	)))
-	
-@process_identity
-def create_form(request, identity=None, is_json=False):
-	from django.db import connection, transaction
-	r = request.POST or request.GET
-	form = Form.create_new_form(r)
-	
-	return HttpResponse(json.dumps(dict(
-		form=form.to_dict()
-	)))
-'''

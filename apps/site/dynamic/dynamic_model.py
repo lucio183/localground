@@ -1,10 +1,11 @@
-from localground.apps.site.models import BasePoint, BaseAudit, ProjectMixin
+from localground.apps.site.models import BasePointMixin, BaseAudit, ProjectMixin
 from localground.apps.site.managers import RecordManager
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.gis.db import models
 from datetime import datetime
-from django.db.models.loading import cache
+#from django.db.models.loading import cache
 from localground.apps.lib.helpers import get_timestamp_no_milliseconds
+from localground.apps.site.models import Field
 # http://stackoverflow.com/questions/3712688/creation-of-dynamic-model-fields-in-django
 # https://code.djangoproject.com/wiki/DynamicModels
 '''
@@ -14,14 +15,9 @@ adds the auditing columns to the user-generated tables.
 '''
 
 
-class DynamicModelMixin(BasePoint, BaseAudit):
-    num = models.IntegerField(null=True, blank=True, db_column='user_num',
-                              verbose_name='Row Number')
-    num_snippet = models.ForeignKey('Snippet', null=True, blank=True,
-                                    db_column='user_num_snippet_id')
-    snippet = models.ForeignKey('Snippet', null=True, blank=True)
+class DynamicModelMixin(BasePointMixin, BaseAudit):
     project = models.ForeignKey('Project')
-    manually_reviewed = models.BooleanField()
+    filter_fields = BaseAudit.filter_fields + ('project',)
     objects = RecordManager()
 
     class Meta:
@@ -37,10 +33,11 @@ class DynamicModelMixin(BasePoint, BaseAudit):
     def form(self):
         if not hasattr(self, '_form'):
             from localground.apps.site.models import Form
+
             self._form = (Form.objects
-                          #.prefetch_related('field_set', 'field_set__data_type')
+                          # .prefetch_related('field_set', 'field_set__data_type')
                           .get(table_name=self._meta.db_table)
-                          )
+            )
         return self._form
 
     @property
@@ -65,9 +62,6 @@ class DynamicModelMixin(BasePoint, BaseAudit):
             data.append(self.__getattribute__(descriptor.col_name))
         return data
 
-    def get_snippet(self, field_name):
-        return self.__getattribute__(field_name + '_snippet')
-
     def get_widget(self, field_name):
         return self.__getattribute__(field_name).widget
 
@@ -75,106 +69,24 @@ class DynamicModelMixin(BasePoint, BaseAudit):
         data = []
         for descriptor in self.dynamic_fields:
             field_transcribed = self.__getattribute__(descriptor.col_name)
-            if descriptor.has_snippet_field:
-                field_image = self.__getattribute__(
-                    descriptor.col_name +
-                    '_snippet')
-            else:
-                field_image = None
-            if field_transcribed is not None:
-                data.append(field_transcribed)
-            elif field_image is not None and not self.manually_reviewed:
-                data.append(
-                    '<img src="%s" />' %
-                    (field_image.absolute_virtual_path()))
-            else:
-                data.append('--')
+            data.append(field_transcribed)
         return data
-
-    def get_dynamic_data_snippet(self):
-        data = []
-        for descriptor in self.dynamic_fields:
-            field_transcribed = self.__getattribute__(descriptor.col_name)
-            if descriptor.has_snippet_field:
-                field_image = self.__getattribute__(
-                    descriptor.col_name +
-                    '_snippet')
-            else:
-                field_image = None
-            if field_image is not None:
-                data.append(
-                    '<img src="%s" />' %
-                    (field_image.absolute_virtual_path()))
-            else:
-                field_transcribed = self.__getattribute__(descriptor.col_name)
-                if field_transcribed is not None:
-                    data.append(field_transcribed)
-                else:
-                    data.append('--')
-        return data
-
-    def get_row_num_default(self):
-        if self.num is not None:
-            return self.num
-        elif self.num_snippet is not None and not self.manually_reviewed:
-            s = self.num_snippet
-            return '<img src="%s" />' % (s.absolute_virtual_path())
-        else:
-            return '--'
-
-    def get_row_num_snippet(self):
-        if self.num_snippet is not None:
-            s = self.num_snippet
-            return '<img src="%s" />' % (s.absolute_virtual_path())
-        else:
-            return '--'
-
-    def get_row_num(self):
-        if self.num is not None:
-            return self.num
-        else:
-            return '--'
-
-    def has_field_level_snippets(self):
-        return self.num_snippet is not None
 
     def to_dict(self, include_project=False, include_marker=True,
-                include_data=False, include_scan=False,
-                include_attachment=False, **kwargs):
+                include_data=False, include_mapimage=False, **kwargs):
         d = dict(
             form_id=self.form.id,
-            id=self.id,
-            num=self.num,
-            reviewed=self.manually_reviewed
-        )
-        if self.snippet is not None:
-            d.update(dict(snippet_url=self.snippet.absolute_virtual_path()))
+            id=self.id
+            )
         if self.point is not None:
             d.update(dict(lat=self.point.y, lng=self.point.x))
         if include_project:
             d.update(dict(project=self.project.to_dict()))
         else:
             d.update(dict(project_id=self.project.id))
-        if include_attachment and self.snippet is not None \
-                and self.snippet.source_attachment is not None:
-            d.update(dict(attachment={
-                'name': self.snippet.source_attachment.name,
-                'attribution': self.snippet.source_attachment.attribution
-            }))
+        
         if include_data:
             data = []
-            # add number field
-            field = dict(
-                col_name='num',
-                col_alias='Number',
-                value=self.num
-            )
-            snippet = self.__getattribute__('num_snippet')
-            if snippet is not None:
-                field.update(dict(
-                    snippet_url=snippet.absolute_virtual_path()
-                ))
-            data.append(field)
 
             # add the rest of the dynamic content:
             for descriptor in self.dynamic_fields:
@@ -186,20 +98,11 @@ class DynamicModelMixin(BasePoint, BaseAudit):
                 if isinstance(field['value'], datetime):
                     field['value'] = field['value'].strftime(
                         '%m/%d/%Y, %I:%M:%S %p')
-                snippet = None
-                if descriptor.has_snippet_field:
-                    snippet = self.__getattribute__(
-                        descriptor.col_name +
-                        '_snippet')
-                if snippet is not None:
-                    field.update(dict(
-                        snippet_url=snippet.absolute_virtual_path()
-                    ))
                 data.append(field)
                 if descriptor.is_display_field:
                     d.update(dict(name=field['value']))
                 if d.get('name') is None:
-                    d.update(dict(name='Record #%s' % self.num))
+                    d.update(dict(name='Record Id #%s' % self.id))
             d.update(dict(fields=data))
 
         return d
@@ -225,7 +128,6 @@ class DynamicModelMixin(BasePoint, BaseAudit):
 
 
 class ModelClassBuilder(object):
-
     def __init__(self, form):
         self.name = 'form_%s' % form.id
         self.form = form
@@ -233,14 +135,13 @@ class ModelClassBuilder(object):
         # needs to be unique
         self.module = 'localground.apps.site.models.%s' % form.table_name
         self.options = options = {
-            'ordering': ['num'],
+            'ordering': ['id'],
             'verbose_name': 'form_%s' % form.id,  # form.table_name,
             'verbose_name': 'form_%s' % form.id,
             'db_table': form.table_name
         }
         self.additional_fields = {}
         self.dynamic_fields = {}
-        self.snippet_fields = {}
         self._model_class = None
 
     @property
@@ -261,20 +162,29 @@ class ModelClassBuilder(object):
                 setattr(ModelClassBuilder, key, value)
 
         # Set up a dictionary to simulate declarations within a class
+        '''
         try:
             del cache.app_models[self.app_label][self.name.lower()]
         except KeyError:
             pass
+        except AttributeError:
+            pass
+        '''
         attrs = {'__module__': self.module, 'Meta': ModelClassBuilder}
 
         # Add in any fields that were provided
         attrs.update(self.additional_fields)
+        attrs.update({
+            'filter_fields': DynamicModelMixin.filter_fields + tuple(self.dynamic_fields.keys())
+        })
+
+
 
         '''
-		-------------------
-		Begin Model Methods
-		-------------------
-		'''
+        -------------------
+        Begin Model Methods
+        -------------------
+        '''
 
         def save(self, user, *args, **kwargs):
             is_new = self.pk is None
@@ -286,7 +196,7 @@ class ModelClassBuilder(object):
                 self.date_created = get_timestamp_no_milliseconds()
             self.last_updated_by = user
             self.time_stamp = get_timestamp_no_milliseconds()
-            #self.project = self.form.project
+            # self.project = self.form.project
             super(self.__class__, self).save(*args, **kwargs)
 
         @classmethod
@@ -305,31 +215,31 @@ class ModelClassBuilder(object):
                            data_type=FieldTypes.DATE, operator='<=')
             ]
             for n in self.form.fields:
-                if n.data_type.id == 1:
+                if n.data_type.id == Field.DataTypes.TEXT:
                     query_fields.append(
                         QueryField(
                             n.col_name,
                             title=n.col_alias,
                             operator='like'))
-                elif n.data_type.id in [2, 6]:
+                elif n.data_type.id in [Field.DataTypes.INTEGER, Field.DataTypes.RATING]:
                     query_fields.append(
                         QueryField(
                             n.col_name,
                             title=n.col_alias,
                             data_type=FieldTypes.INTEGER))
-                elif n.data_type.id == 3:
+                elif n.data_type.id == Field.DataTypes.DATETIME:
                     query_fields.append(
                         QueryField(
                             n.col_name,
                             title=n.col_alias,
                             data_type=FieldTypes.DATE))
-                elif n.data_type.id == 4:
+                elif n.data_type.id == Field.DataTypes.BOOLEAN:
                     query_fields.append(
                         QueryField(
                             n.col_name,
                             title=n.col_alias,
                             data_type=FieldTypes.BOOLEAN))
-                elif n.data_type.id == 5:
+                elif n.data_type.id == Field.DataTypes.DECIMAL:
                     query_fields.append(
                         QueryField(
                             n.col_name,
@@ -339,14 +249,20 @@ class ModelClassBuilder(object):
 
         attrs.update(dict(
             save=save,
-            filter_fields=filter_fields
+            #filter_fields=('id', 'name')
         ))
+        
+        # --------------------------------------------------
+        # remove model from  application cache, if it exists
+        # --------------------------------------------------
+        from django.apps import apps
+        app_models = apps.all_models[self.app_label]
+        if app_models.get(self.name):
+            del app_models[self.name]
+        # --------------------------------------------------
 
         # Create the class, which automatically triggers ModelBase processing
         self._model_class = type(self.name, (DynamicModelMixin, ), attrs)
-        #import sys
-        #sys.stderr.write('\n%s' % self._model_class._meta.get_all_field_names())
-        #sys.stderr.write('\n%s' % self.additional_fields)
         return self._model_class
 
     def add_dynamic_fields_to_model(self):
@@ -359,43 +275,43 @@ class ModelClassBuilder(object):
                 'verbose_name': n.col_alias,
                 'db_column': n.col_name_db
             }
-            if n.data_type.id == 1:
+            if n.data_type.id == Field.DataTypes.TEXT:
                 field = models.CharField(max_length=1000, **kwargs)
-            elif n.data_type.id in [2, 6]:
+            elif n.data_type.id in [Field.DataTypes.INTEGER, Field.DataTypes.RATING]:
                 field = models.IntegerField(**kwargs)
-            elif n.data_type.id == 3:
+            elif n.data_type.id == Field.DataTypes.DATETIME:
                 field = models.DateTimeField(**kwargs)
-            elif n.data_type.id == 4:
-                field = models.BooleanField(**kwargs)
-            elif n.data_type.id == 5:
+            elif n.data_type.id == Field.DataTypes.BOOLEAN:
+                field = models.NullBooleanField(**kwargs)
+            elif n.data_type.id == Field.DataTypes.DECIMAL:
                 field = models.FloatField(**kwargs)
+            elif n.data_type.id == Field.DataTypes.PHOTO:
+                field = models.ForeignKey(
+                    'Photo',
+                    null=True,
+                    blank=True,
+                    db_column=n.col_name_db
+                )
+                # raise Exception(field)
+            elif n.data_type.id == Field.DataTypes.AUDIO:
+                field = models.ForeignKey(
+                    'Audio',
+                    null=True,
+                    blank=True,
+                    db_column=n.col_name_db
+                )
 
             # add dynamic field:
             self.dynamic_fields.update({
                 n.col_name: field
             })
-            if n.has_snippet_field:
-                # also add snippet placeholder:
-                snippet_field_name = '%s_snippet' % n.col_name
-                self.snippet_fields.update({
-                    snippet_field_name: models.ForeignKey(
-                        'Snippet',
-                        null=True,
-                        blank=True,
-                        db_column='%s_snippet_id' % n.col_name_db
-                    )
-                })
         self.additional_fields.update(self.dynamic_fields)
-        self.additional_fields.update(self.snippet_fields)
-        #import sys
-        #sys.stderr.write('%s' % self.additional_fields)
 
     def sync_db(self):
-        '''
-        This function uses the same code that's used in syncdb to dynamically
-        execute DDL sql on-the-fly.  Copied from:
-        /usr/local/lib/python2.6/dist-packages/django/core/management/commands/syncdb.py
-        '''
+        # This function uses the same code that's used in syncdb to dynamically
+        # execute DDL sql on-the-fly.  Copied from:
+        # /usr/local/lib/python2.6/dist-packages/django/core/management/commands/syncdb.py
+        
         from django.core.management.color import no_style
         from django.db import connection, transaction
 
@@ -426,42 +342,29 @@ class ModelClassBuilder(object):
                 self.model_class,
                 no_style(),
                 pending_references))
-
-        errors_encountered = False
         try:
-            for statement in sql:
-                cursor.execute(statement)
+            with transaction.atomic():
+                errors_encountered = False
+                for statement in sql:
+                    cursor.execute(statement)
+
+                # Install SQL indices for newly created model
+                for model in seen_models:
+                    if model in created_models:
+                        index_sql = connection.creation.sql_indexes_for_model(
+                            model,
+                            no_style())
+                        if index_sql:
+                            for sql in index_sql:
+                                cursor.execute(sql)
         except Exception:
             self.stderr.write("Failed to install index for %s.%s model: %s\n" %
                               (app_name, model._meta.object_name, e))
-            errors_encountered = True
 
-        # Install SQL indices for newly created model
-        if not errors_encountered:
-            for model in seen_models:
-                if model in created_models:
-                    index_sql = connection.creation.sql_indexes_for_model(
-                        model,
-                        no_style())
-                    if index_sql:
-                        try:
-                            for sql in index_sql:
-                                cursor.execute(sql)
-                        except Exception as e:
-                            self.stderr.write(
-                                "Failed to install index for %s.%s model: %s\n" %
-                                (app_name, model._meta.object_name, e))
-                            errors_encountered = True
-
-        if errors_encountered:
-            transaction.rollback_unless_managed()
-        else:
-            transaction.commit_unless_managed()
-
-        '''
-		Add to ContentTypes also:
-		'''
+        #Add to ContentTypes also:
+        
         from django.utils.encoding import smart_text
+
         ct = ContentType(
             name=smart_text(self.model_class._meta.verbose_name_raw),
             app_label=self.model_class._meta.app_label,
